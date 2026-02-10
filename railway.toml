@@ -8,7 +8,7 @@ nixPkgs = ["nodejs_20", "npm-9_x"]
 cmds = ["npm install"]
 
 [build.nixpacksPlan.phases.build]
-cmds = ["npx prisma generate", "npx prisma db push --skip-generate", "npm run build"]
+cmds = ["npx prisma generate", "node scripts/db-push.mjs", "npm run build"]
 
 [deploy]
 startCommand = "node dist/server/index.js"

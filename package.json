@@ -14,10 +14,10 @@
     "start": "node dist/server/index.js",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
-    "db:push": "prisma db push",
+    "db:push": "node scripts/db-push.mjs",
     "db:seed": "tsx prisma/seed.ts",
     "lint": "eslint src/ --ext .ts,.tsx",
-    "render:build": "npx prisma generate && npx prisma db push --skip-generate && npm run build",
+    "render:build": "npx prisma generate && node scripts/db-push.mjs && npm run build",
     "render:start": "node dist/server/index.js",
     "test": "vitest run",
     "test:watch": "vitest"

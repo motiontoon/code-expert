@@ -19,7 +19,6 @@ const envSchema = z.object({
   ANTHROPIC_API_KEY: z.string().default(''),
   AI_MODEL: z.string().default('claude-sonnet-4-5-20250929'),
   AI_MAX_TOKENS: z.coerce.number().default(8192),
-  REDIS_URL: z.string().default('redis://localhost:6379'),
   FILE_GUARD_ENABLED: z.coerce.boolean().default(true),
   FILE_GUARD_STRICT_MODE: z.coerce.boolean().default(true),
   LOG_LEVEL: z.string().default('debug'),

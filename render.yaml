@@ -1,64 +1,43 @@
 # ============================================
-# Codex Forge - Render Blueprint (IaC)
-# Deploy: https://render.com/deploy
+# Codex Forge - Render Free Tier Config
+# ============================================
+# This file documents the Render configuration.
+# Deploy manually via dashboard.render.com
+#
+# Free tier includes:
+#   - 1 Web Service (750 hrs/month, spins down after 15min idle)
+#   - 1 PostgreSQL (256MB, expires after 90 days)
+#   - No Redis needed (task queue uses PostgreSQL polling)
+#
+# Build Command:  npm install && npm run render:build
+# Start Command:  npm run render:start
+# Health Check:   /api/health
 # ============================================
 
 services:
-  # ── Web Service (Backend + Frontend) ──────────
   - type: web
     name: codex-forge
     runtime: node
-    region: frankfurt  # Change to your preferred region
-    plan: starter      # starter = $7/mo, free = $0 (with limits)
+    region: frankfurt
+    plan: free
     buildCommand: npm install && npm run render:build
     startCommand: npm run render:start
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: 3000
       - key: DATABASE_URL
         fromDatabase:
           name: codex-forge-db
           property: connectionString
-      - key: SERVER_URL
-        sync: false  # Set after first deploy: https://codex-forge-xxxx.onrender.com
-      - key: CLIENT_URL
-        sync: false  # Same as SERVER_URL in production
       - key: SESSION_SECRET
         generateValue: true
       - key: JWT_SECRET
         generateValue: true
-      - key: JWT_EXPIRATION
-        value: 7d
-      - key: GITHUB_CLIENT_ID
-        sync: false  # Set manually from GitHub OAuth App
-      - key: GITHUB_CLIENT_SECRET
-        sync: false  # Set manually from GitHub OAuth App
-      - key: GITHUB_CALLBACK_URL
-        sync: false  # https://codex-forge-xxxx.onrender.com/api/auth/github/callback
-      - key: ANTHROPIC_API_KEY
-        sync: false  # Set manually
-      - key: AI_MODEL
-        value: claude-sonnet-4-5-20250929
-      - key: FILE_GUARD_ENABLED
-        value: "true"
-      - key: FILE_GUARD_STRICT_MODE
-        value: "true"
-      - key: LOG_LEVEL
-        value: info
 
-  # ── Redis (for task queue) ────────────────────
-  - type: redis
-    name: codex-forge-redis
-    plan: starter  # starter = $7/mo, free = $0
-    ipAllowList: []
-
-# ── PostgreSQL Database ─────────────────────────
 databases:
   - name: codex-forge-db
-    plan: starter    # starter = $7/mo, free = $0 (90-day limit)
+    plan: free
     databaseName: codex_forge
     user: codex_forge_user
     region: frankfurt

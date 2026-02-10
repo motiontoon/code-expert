@@ -1,0 +1,256 @@
+// ============================================
+// Codex Forge - Database Schema
+// Advanced AI-Powered Coding Automation Platform
+// ============================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// User & Authentication
+// ============================================
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  username      String   @unique
+  passwordHash  String?
+  displayName   String?
+  avatarUrl     String?
+  bio           String?
+  role          String   @default("user") // user, pro, admin
+  plan          String   @default("free") // free, pro, enterprise
+  isActive      Boolean  @default(true)
+  lastLoginAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  githubAccount  GitHubAccount?
+  projects       Project[]
+  tasks          CodingTask[]
+  apiKeys        ApiKey[]
+  sessions       Session[]
+  fileAudits     FileAuditLog[]
+  notifications  Notification[]
+}
+
+model GitHubAccount {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  githubId        String   @unique
+  githubUsername   String
+  accessToken     String
+  refreshToken    String?
+  tokenExpiresAt  DateTime?
+  scope           String?
+  avatarUrl       String?
+  profileUrl      String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  repositories    Repository[]
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ApiKey {
+  id          String   @id @default(uuid())
+  userId      String
+  name        String
+  keyHash     String   @unique
+  prefix      String   // First 8 chars for identification
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ============================================
+// Projects & Repositories
+// ============================================
+
+model Project {
+  id          String   @id @default(uuid())
+  userId      String
+  name        String
+  description String?
+  language    String?
+  framework   String?
+  status      String   @default("active") // active, archived, deleted
+  settings    String   @default("{}") // JSON settings
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  repositories Repository[]
+  tasks        CodingTask[]
+  fileAudits   FileAuditLog[]
+}
+
+model Repository {
+  id              String   @id @default(uuid())
+  githubAccountId String
+  projectId       String?
+  githubRepoId    String
+  fullName        String   // e.g. "owner/repo"
+  name            String
+  owner           String
+  defaultBranch   String   @default("main")
+  isPrivate       Boolean  @default(false)
+  cloneUrl        String
+  description     String?
+  language        String?
+  lastSyncedAt    DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  githubAccount GitHubAccount @relation(fields: [githubAccountId], references: [id], onDelete: Cascade)
+  project       Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  tasks         CodingTask[]
+  fileAudits    FileAuditLog[]
+}
+
+// ============================================
+// Coding Tasks & Queue
+// ============================================
+
+model CodingTask {
+  id            String   @id @default(uuid())
+  userId        String
+  projectId     String?
+  repositoryId  String?
+  title         String
+  description   String
+  taskType      String   // feature, bugfix, refactor, test, docs, review, custom
+  priority      String   @default("medium") // low, medium, high, critical
+  status        String   @default("queued") // queued, reading, coding, testing, reviewing, completed, failed, cancelled
+  branch        String?
+  targetBranch  String?  @default("main")
+
+  // AI Engine metadata
+  aiModel       String?
+  promptTokens  Int      @default(0)
+  outputTokens  Int      @default(0)
+  totalCost     Float    @default(0)
+
+  // Execution tracking
+  startedAt     DateTime?
+  completedAt   DateTime?
+  failedAt      DateTime?
+  errorMessage  String?
+  retryCount    Int      @default(0)
+  maxRetries    Int      @default(3)
+
+  // Results
+  filesCreated  Int      @default(0)
+  filesModified Int      @default(0)
+  linesAdded    Int      @default(0)
+  linesRemoved  Int      @default(0)
+  commitSha     String?
+  pullRequestUrl String?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project       Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  repository    Repository?   @relation(fields: [repositoryId], references: [id], onDelete: SetNull)
+  steps         TaskStep[]
+  fileAudits    FileAuditLog[]
+}
+
+model TaskStep {
+  id          String   @id @default(uuid())
+  taskId      String
+  stepNumber  Int
+  action      String   // read, analyze, plan, write, test, commit, push
+  description String
+  status      String   @default("pending") // pending, in_progress, completed, failed, skipped
+  input       String?  // JSON
+  output      String?  // JSON
+  duration    Int?     // milliseconds
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+
+  task CodingTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+}
+
+// ============================================
+// File Guard - Read-Before-Write Audit System
+// ============================================
+
+model FileAuditLog {
+  id            String   @id @default(uuid())
+  userId        String
+  projectId     String?
+  repositoryId  String?
+  taskId        String?
+  filePath      String
+  action        String   // read, write, create, delete, rename
+
+  // File Guard enforcement
+  wasReadFirst  Boolean  @default(false)
+  readAt        DateTime?
+  writeAt       DateTime?
+  guardPassed   Boolean  @default(false)
+  guardMessage  String?
+
+  // Content tracking
+  contentBefore String?  // Hash of content before modification
+  contentAfter  String?  // Hash of content after modification
+  diffSummary   String?
+  linesChanged  Int      @default(0)
+
+  createdAt     DateTime @default(now())
+
+  // Relations
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project     Project?    @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  repository  Repository? @relation(fields: [repositoryId], references: [id], onDelete: SetNull)
+  task        CodingTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([filePath, userId])
+  @@index([taskId])
+}
+
+// ============================================
+// Notifications
+// ============================================
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String   // task_completed, task_failed, pr_created, guard_violation, system
+  title     String
+  message   String
+  data      String?  // JSON
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

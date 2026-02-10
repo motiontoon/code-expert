@@ -109,7 +109,8 @@ async function bootstrap() {
   // Static files (production)
   // ============================================
   if (env.NODE_ENV === 'production') {
-    const clientPath = path.resolve(__dirname, '../../dist/client');
+    // Compiled: dist/server/index.js → ../client = dist/client
+    const clientPath = path.resolve(__dirname, '../client');
     app.use(express.static(clientPath));
     app.get('*', (_req, res) => {
       res.sendFile(path.join(clientPath, 'index.html'));

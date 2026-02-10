@@ -8,7 +8,7 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(3000),
   SERVER_URL: z.string().default('http://localhost:3000'),
   CLIENT_URL: z.string().default('http://localhost:5173'),
-  DATABASE_URL: z.string().default('file:./dev.db'),
+  DATABASE_URL: z.string().default('postgresql://localhost:5432/codex_forge'),
   SESSION_SECRET: z.string().default('dev-session-secret'),
   JWT_SECRET: z.string().default('dev-jwt-secret'),
   JWT_EXPIRATION: z.string().default('7d'),

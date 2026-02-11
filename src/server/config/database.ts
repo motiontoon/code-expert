@@ -51,13 +51,21 @@ prisma.$on('warn', (e) => {
 
 export { prisma };
 
-export async function connectDatabase(): Promise<void> {
-  try {
-    await prisma.$connect();
-    logger.info('Database connected successfully');
-  } catch (error) {
-    logger.error('Failed to connect to database:', error);
-    throw error;
+export async function connectDatabase(retries = 5, delay = 3000): Promise<void> {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      await prisma.$connect();
+      logger.info('Database connected successfully');
+      return;
+    } catch (error) {
+      logger.error(`Database connection attempt ${attempt}/${retries} failed:`, error);
+      if (attempt === retries) {
+        throw error;
+      }
+      logger.info(`Retrying in ${delay / 1000}s...`);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      delay *= 2; // exponential backoff
+    }
   }
 }
 

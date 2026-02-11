@@ -34,4 +34,4 @@ USER forge
 
 EXPOSE 3000
 
-CMD ["node", "dist/server/index.js"]
+CMD ["sh", "-c", "node scripts/db-push.mjs && node dist/server/index.js"]

@@ -51,8 +51,9 @@ async function bootstrap() {
     });
   });
 
-  // Make io available to routes
+  // Make io available to routes and coding engine
   app.set('io', io);
+  codingEngine.setIO(io);
 
   // ============================================
   // Middleware

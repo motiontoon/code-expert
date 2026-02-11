@@ -19,8 +19,8 @@
     "lint": "eslint src/ --ext .ts,.tsx",
     "render:build": "npx prisma generate && npm run build",
     "render:start": "node scripts/db-push.mjs && node dist/server/index.js",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "test": "vitest run --config vitest.config.ts",
+    "test:watch": "vitest --config vitest.config.ts"
   },
   "dependencies": {
     "@octokit/rest": "^21.0.0",

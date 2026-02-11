@@ -1,21 +1,34 @@
 import { PrismaClient } from '@prisma/client';
 import { logger } from '../utils/logger.js';
 
-// Railway internal connections don't use SSL.
-// If DATABASE_URL has no sslmode param, default to disable for Railway/Docker.
+// Only add sslmode=disable for local/Docker connections (localhost, 127.0.0.1,
+// Docker service names, or Railway internal network). External Railway URLs go
+// through a TLS-terminating proxy and MUST use SSL (Prisma's default).
 function getDatabaseUrl(): string {
   const url = process.env.DATABASE_URL || '';
-  if (url && !url.includes('sslmode=')) {
-    const separator = url.includes('?') ? '&' : '?';
-    return `${url}${separator}sslmode=disable`;
+  if (!url || url.includes('sslmode=')) return url;
+
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname;
+    const isLocal =
+      host === 'localhost' ||
+      host === '127.0.0.1' ||
+      host.endsWith('.railway.internal') ||
+      // Docker service names (no dots = not a real hostname)
+      !host.includes('.');
+    if (isLocal) {
+      const separator = url.includes('?') ? '&' : '?';
+      return `${url}${separator}sslmode=disable`;
+    }
+  } catch {
+    // If URL parsing fails, don't modify it
   }
   return url;
 }
 
 // Override before PrismaClient reads it
 const resolvedUrl = getDatabaseUrl();
-process.env.DATABASE_URL = resolvedUrl;
-logger.info(`Database URL resolved (sslmode=${resolvedUrl.includes('sslmode=') ? resolvedUrl.match(/sslmode=(\w+)/)?.[1] : 'default'})`);
 
 const prisma = new PrismaClient({
   datasources: {

@@ -21,7 +21,10 @@ export default function TaskDetail() {
 
   useEffect(() => {
     if (!id) return;
-    tasks.get(id).then((d) => { setTask(d.task); setLoading(false); }).catch(() => setLoading(false));
+    tasks.get(id).then((d) => { setTask(d.task); setLoading(false); }).catch((err) => {
+      console.warn('Failed to load task:', err);
+      setLoading(false);
+    });
   }, [id]);
 
   const handleCancel = async () => {

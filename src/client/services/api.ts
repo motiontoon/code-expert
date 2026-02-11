@@ -223,6 +223,7 @@ export interface EngineStatus {
   isRunning: boolean;
   activeTasks: number;
   maxConcurrent: number;
+  aiConfigured: boolean;
 }
 
 export interface GitHubProfile {

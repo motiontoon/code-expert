@@ -15,7 +15,7 @@ export default function Dashboard() {
     Promise.allSettled([
       tasks.stats().then((d) => setStats(d.stats)),
       tasks.engineStatus().then((d) => setEngine(d.engine)),
-      tasks.list({ limit: 5 } as never).then((d) => setRecentTasks(d.tasks)),
+      tasks.list({ page: 1 }).then((d) => setRecentTasks(d.tasks.slice(0, 5))),
       projects.list().then((d) => setProjectList(d.projects.slice(0, 5))),
       fileGuardApi.stats().then((d) => setGuardStats(d.stats)),
     ]);

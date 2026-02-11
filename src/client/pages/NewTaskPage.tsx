@@ -21,8 +21,12 @@ export default function NewTaskPage() {
   });
 
   useEffect(() => {
-    projects.list().then((d) => setProjectList(d.projects)).catch(() => {});
-    github.repos().then((d) => setRepos(d.repositories)).catch(() => {});
+    projects.list().then((d) => setProjectList(d.projects)).catch((err) => {
+      console.warn('Failed to load projects:', err);
+    });
+    github.repos().then((d) => setRepos(d.repositories)).catch((err) => {
+      console.warn('Failed to load repos:', err);
+    });
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {

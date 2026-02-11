@@ -263,10 +263,15 @@ export class CodingEngine {
         try {
           const jsonMatch = plan.match(/\[[\s\S]*\]/);
           if (jsonMatch) {
-            planSteps = JSON.parse(jsonMatch[0]);
+            const parsed = JSON.parse(jsonMatch[0]);
+            if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'object' && 'file' in parsed[0]) {
+              planSteps = parsed as Array<{ file: string; action: string; description: string }>;
+            } else {
+              logger.warn('AI plan JSON is not a valid step array, skipping code generation');
+            }
           }
-        } catch {
-          logger.warn('Failed to parse AI plan as JSON, using raw plan');
+        } catch (parseErr) {
+          logger.warn(`Failed to parse AI plan as JSON: ${parseErr}`);
         }
 
         for (const planItem of planSteps.slice(0, 10)) {

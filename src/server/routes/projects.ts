@@ -93,7 +93,17 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
 // Update Project
 // ============================================
 
-router.patch('/:id', async (req: Request, res: Response, next: NextFunction) => {
+const updateProjectSchema = z.object({
+  body: z.object({
+    name: z.string().min(1).max(100).optional(),
+    description: z.string().max(1000).optional(),
+    language: z.string().max(50).optional(),
+    framework: z.string().max(50).optional(),
+    status: z.enum(['active', 'archived']).optional(),
+  }),
+});
+
+router.patch('/:id', validate(updateProjectSchema), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const project = await prisma.project.findUnique({ where: { id: req.params.id } });
     if (!project) throw new NotFoundError('Project not found');

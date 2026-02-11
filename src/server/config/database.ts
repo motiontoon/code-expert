@@ -13,9 +13,14 @@ function getDatabaseUrl(): string {
 }
 
 // Override before PrismaClient reads it
-process.env.DATABASE_URL = getDatabaseUrl();
+const resolvedUrl = getDatabaseUrl();
+process.env.DATABASE_URL = resolvedUrl;
+logger.info(`Database URL resolved (sslmode=${resolvedUrl.includes('sslmode=') ? resolvedUrl.match(/sslmode=(\w+)/)?.[1] : 'default'})`);
 
 const prisma = new PrismaClient({
+  datasources: {
+    db: { url: resolvedUrl },
+  },
   log: [
     { emit: 'event', level: 'query' },
     { emit: 'event', level: 'error' },

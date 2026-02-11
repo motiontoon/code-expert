@@ -8,10 +8,10 @@ nixPkgs = ["nodejs_20", "npm-9_x"]
 cmds = ["npm install"]
 
 [build.nixpacksPlan.phases.build]
-cmds = ["npx prisma generate", "node scripts/db-push.mjs", "npm run build"]
+cmds = ["npx prisma generate", "npm run build"]
 
 [deploy]
-startCommand = "node dist/server/index.js"
+startCommand = "node scripts/db-push.mjs && node dist/server/index.js"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 30
 restartPolicyType = "ON_FAILURE"

@@ -1,17 +1,8 @@
 [build]
-builder = "NIXPACKS"
-
-[build.nixpacksPlan.phases.setup]
-nixPkgs = ["nodejs_22", "npm-10_x"]
-
-[build.nixpacksPlan.phases.install]
-cmds = ["npm ci"]
-
-[build.nixpacksPlan.phases.build]
-cmds = ["npx prisma generate", "npm run build"]
+builder = "DOCKERFILE"
 
 [deploy]
-startCommand = "node dist/server/index.js"
+startCommand = "sh -c '{ timeout 15 npx prisma db push --skip-generate --accept-data-loss 2>&1 || true; } & exec node dist/server/index.js'"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 60
 restartPolicyType = "ON_FAILURE"

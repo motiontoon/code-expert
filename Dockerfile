@@ -17,7 +17,6 @@ RUN npm run build
 FROM base AS runner
 ENV NODE_ENV=production
 
-# Create non-root user
 RUN addgroup --system --gid 1001 forge && \
     adduser --system --uid 1001 forge
 
@@ -25,13 +24,11 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./
 COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/scripts ./scripts
 
-# Create data directory
 RUN mkdir -p /app/data /app/logs && chown -R forge:forge /app
 
 USER forge
-
 EXPOSE 3000
 
-CMD ["node", "dist/server/index.js"]
+# db push in background (max 15s), server starts immediately
+CMD ["sh", "-c", "{ timeout 15 npx prisma db push --skip-generate --accept-data-loss 2>&1 || true; } & exec node dist/server/index.js"]

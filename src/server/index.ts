@@ -7,6 +7,7 @@ import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import { createServer } from 'http';
 import { Server as SocketServer } from 'socket.io';
+import { execSync } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -24,6 +25,9 @@ import githubRoutes from './routes/github.js';
 import fileGuardRoutes from './routes/fileGuard.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Track database readiness
+let dbReady = false;
 
 async function bootstrap() {
   const app = express();
@@ -95,6 +99,22 @@ async function bootstrap() {
   app.use('/api/', apiLimiter);
 
   // ============================================
+  // Health check (always responds, even before DB is ready)
+  // ============================================
+  app.get('/api/health', (_req, res) => {
+    res.json({
+      success: true,
+      data: {
+        status: dbReady ? 'healthy' : 'starting',
+        dbReady,
+        version: '1.0.0',
+        uptime: process.uptime(),
+        timestamp: new Date().toISOString(),
+      },
+    });
+  });
+
+  // ============================================
   // API Routes
   // ============================================
   app.use('/api/auth', authRoutes);
@@ -103,20 +123,6 @@ async function bootstrap() {
   app.use('/api/github', githubRoutes);
   app.use('/api/file-guard', fileGuardRoutes);
 
-  // Health check
-  app.get('/api/health', (_req, res) => {
-    res.json({
-      success: true,
-      data: {
-        status: 'healthy',
-        version: '1.0.0',
-        engine: codingEngine.getStatus(),
-        uptime: process.uptime(),
-        timestamp: new Date().toISOString(),
-      },
-    });
-  });
-
   // ============================================
   // Error handling (API only)
   // ============================================
@@ -124,7 +130,7 @@ async function bootstrap() {
   app.use(errorHandler);
 
   // ============================================
-  // Static files & SPA fallback (production)
+  // Static files & SPA fallback
   // ============================================
   const clientPath = path.resolve(__dirname, '../client');
   app.use(express.static(clientPath));
@@ -133,15 +139,34 @@ async function bootstrap() {
   });
 
   // ============================================
-  // Start
+  // Start listening FIRST (so healthcheck passes immediately)
   // ============================================
+  await new Promise<void>((resolve) => {
+    httpServer.listen(env.PORT, () => {
+      logger.info(`Server listening on port ${env.PORT}`);
+      resolve();
+    });
+  });
+
+  // ============================================
+  // Database setup (AFTER server is listening)
+  // ============================================
+  try {
+    // Run prisma db push to sync schema
+    logger.info('Running database schema sync...');
+    runDbPush();
+    logger.info('Database schema synced');
+  } catch (err) {
+    logger.error('Database schema sync failed (will retry on connect):', err);
+  }
+
   await connectDatabase();
+  dbReady = true;
 
   // Start coding engine
   codingEngine.start();
 
-  httpServer.listen(env.PORT, () => {
-    logger.info(`
+  logger.info(`
 ╔══════════════════════════════════════════════════╗
 ║                                                  ║
 ║          ⚡ CODEX FORGE v1.0.0 ⚡               ║
@@ -153,8 +178,7 @@ async function bootstrap() {
 ║  Env:     ${env.NODE_ENV.padEnd(38)}║
 ║                                                  ║
 ╚══════════════════════════════════════════════════╝
-    `);
-  });
+  `);
 
   // Graceful shutdown
   const shutdown = async () => {
@@ -166,6 +190,38 @@ async function bootstrap() {
 
   process.on('SIGTERM', shutdown);
   process.on('SIGINT', shutdown);
+}
+
+/**
+ * Run prisma db push inline (no separate process needed).
+ * Adds sslmode=disable only for local/internal connections.
+ */
+function runDbPush(): void {
+  const url = process.env.DATABASE_URL || '';
+  const execEnv = { ...process.env };
+
+  if (url && !url.includes('sslmode=')) {
+    try {
+      const host = new URL(url).hostname;
+      const isLocal =
+        host === 'localhost' ||
+        host === '127.0.0.1' ||
+        host.endsWith('.railway.internal') ||
+        !host.includes('.');
+      if (isLocal) {
+        const sep = url.includes('?') ? '&' : '?';
+        execEnv.DATABASE_URL = `${url}${sep}sslmode=disable`;
+      }
+    } catch {
+      // leave URL as-is
+    }
+  }
+
+  execSync('npx prisma db push --skip-generate --accept-data-loss', {
+    stdio: 'inherit',
+    env: execEnv,
+    timeout: 30000, // 30s max
+  });
 }
 
 bootstrap().catch((err) => {

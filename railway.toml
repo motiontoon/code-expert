@@ -11,7 +11,7 @@ cmds = ["npm ci"]
 cmds = ["npx prisma generate", "npm run build"]
 
 [deploy]
-startCommand = "node scripts/db-push.mjs && node dist/server/index.js"
+startCommand = "node dist/server/index.js"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 60
 restartPolicyType = "ON_FAILURE"

@@ -34,7 +34,7 @@ async function bootstrap() {
   // ============================================
   const io = new SocketServer(httpServer, {
     cors: {
-      origin: env.CLIENT_URL,
+      origin: [env.SERVER_URL, env.CLIENT_URL].filter(Boolean),
       credentials: true,
     },
   });
@@ -59,11 +59,22 @@ async function bootstrap() {
   // Middleware
   // ============================================
   app.use(helmet({
-    contentSecurityPolicy: env.NODE_ENV === 'production' ? undefined : false,
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+        fontSrc: ["'self'", "https://fonts.gstatic.com"],
+        imgSrc: ["'self'", "data:", "https:", "blob:"],
+        connectSrc: ["'self'", "wss:", "ws:"],
+      },
+    },
   }));
   app.use(compression());
   app.use(cors({
-    origin: env.NODE_ENV === 'production' ? env.SERVER_URL : [env.CLIENT_URL, env.SERVER_URL],
+    origin: env.NODE_ENV === 'production'
+      ? [env.SERVER_URL, env.CLIENT_URL].filter(Boolean)
+      : [env.CLIENT_URL, env.SERVER_URL],
     credentials: true,
   }));
   app.use(express.json({ limit: '10mb' }));
@@ -107,22 +118,19 @@ async function bootstrap() {
   });
 
   // ============================================
-  // Static files (production)
+  // Error handling (API only)
   // ============================================
-  if (env.NODE_ENV === 'production') {
-    // Compiled: dist/server/index.js → ../client = dist/client
-    const clientPath = path.resolve(__dirname, '../client');
-    app.use(express.static(clientPath));
-    app.get('*', (_req, res) => {
-      res.sendFile(path.join(clientPath, 'index.html'));
-    });
-  }
+  app.use('/api', notFoundHandler);
+  app.use(errorHandler);
 
   // ============================================
-  // Error handling
+  // Static files & SPA fallback (production)
   // ============================================
-  app.use(notFoundHandler);
-  app.use(errorHandler);
+  const clientPath = path.resolve(__dirname, '../client');
+  app.use(express.static(clientPath));
+  app.get('*', (_req, res) => {
+    res.sendFile(path.join(clientPath, 'index.html'));
+  });
 
   // ============================================
   // Start

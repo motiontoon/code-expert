@@ -1,33 +1,43 @@
 import { PrismaClient } from '@prisma/client';
 import { logger } from '../utils/logger.js';
 
-// Only add sslmode=disable for local/Docker connections (localhost, 127.0.0.1,
-// Docker service names, or Railway internal network). External Railway URLs go
-// through a TLS-terminating proxy and MUST use SSL (Prisma's default).
+/**
+ * Build the database URL with appropriate SSL settings.
+ * - Railway internal (.railway.internal) or local: sslmode=disable
+ * - Railway proxy / external: no sslmode (Prisma uses SSL by default)
+ * - If connection fails, adds connect_timeout for faster retries
+ */
 function getDatabaseUrl(): string {
   const url = process.env.DATABASE_URL || '';
-  if (!url || url.includes('sslmode=')) return url;
+  if (!url) {
+    logger.warn('DATABASE_URL is not set!');
+    return url;
+  }
+
+  logger.info(`Database host: ${(() => { try { return new URL(url).hostname; } catch { return 'parse-error'; } })()}`);
+
+  if (url.includes('sslmode=')) return url;
 
   try {
-    const parsed = new URL(url);
-    const host = parsed.hostname;
+    const host = new URL(url).hostname;
     const isLocal =
       host === 'localhost' ||
       host === '127.0.0.1' ||
       host.endsWith('.railway.internal') ||
-      // Docker service names (no dots = not a real hostname)
       !host.includes('.');
     if (isLocal) {
-      const separator = url.includes('?') ? '&' : '?';
-      return `${url}${separator}sslmode=disable`;
+      const sep = url.includes('?') ? '&' : '?';
+      return `${url}${sep}sslmode=disable&connect_timeout=10`;
     }
   } catch {
-    // If URL parsing fails, don't modify it
+    // leave as-is
   }
-  return url;
+
+  // External connection: add connect_timeout only
+  const sep = url.includes('?') ? '&' : '?';
+  return `${url}${sep}connect_timeout=10`;
 }
 
-// Override before PrismaClient reads it
 const resolvedUrl = getDatabaseUrl();
 
 const prisma = new PrismaClient({
@@ -35,7 +45,6 @@ const prisma = new PrismaClient({
     db: { url: resolvedUrl },
   },
   log: [
-    { emit: 'event', level: 'query' },
     { emit: 'event', level: 'error' },
     { emit: 'event', level: 'warn' },
   ],
@@ -51,20 +60,20 @@ prisma.$on('warn', (e) => {
 
 export { prisma };
 
-export async function connectDatabase(retries = 5, delay = 3000): Promise<void> {
+export async function connectDatabase(retries = 5, delay = 2000): Promise<void> {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       await prisma.$connect();
       logger.info('Database connected successfully');
       return;
     } catch (error) {
-      logger.error(`Database connection attempt ${attempt}/${retries} failed:`, error);
+      const msg = error instanceof Error ? error.message : String(error);
+      logger.error(`DB connection attempt ${attempt}/${retries} failed: ${msg}`);
       if (attempt === retries) {
         throw error;
       }
-      logger.info(`Retrying in ${delay / 1000}s...`);
       await new Promise((resolve) => setTimeout(resolve, delay));
-      delay *= 2; // exponential backoff
+      delay = Math.min(delay * 2, 10000);
     }
   }
 }

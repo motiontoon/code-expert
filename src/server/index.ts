@@ -26,9 +26,13 @@ import fileGuardRoutes from './routes/fileGuard.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let dbReady = false;
+let dbError: string | null = null;
 
 const app = express();
 const httpServer = createServer(app);
+
+// Trust Railway/Render reverse proxy (required for secure cookies over HTTPS)
+app.set('trust proxy', 1);
 
 // ============================================
 // Socket.IO
@@ -95,11 +99,16 @@ app.use('/api/', rateLimit({
 // Health check - ALWAYS responds, no DB dependency
 // ============================================
 app.get('/api/health', (_req, res) => {
+  const dbHost = (() => {
+    try { return new URL(process.env.DATABASE_URL || '').hostname; } catch { return 'not-set'; }
+  })();
   res.json({
     success: true,
     data: {
-      status: dbReady ? 'healthy' : 'starting',
+      status: dbReady ? 'healthy' : (dbError ? 'db_error' : 'starting'),
       dbReady,
+      dbHost,
+      dbError,
       version: '1.0.0',
       uptime: process.uptime(),
     },
@@ -174,6 +183,7 @@ async function initDatabase(): Promise<void> {
 ╚══════════════════════════════════════════════════╝
     `);
   } catch (err) {
+    dbError = err instanceof Error ? err.message : String(err);
     logger.error('Database connection failed. Server is running but API routes requiring DB will fail:', err);
     // DO NOT process.exit() - keep serving healthcheck and static files
   }

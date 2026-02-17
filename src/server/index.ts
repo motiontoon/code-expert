@@ -9,12 +9,16 @@ import { createServer } from 'http';
 import { Server as SocketServer } from 'socket.io';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 
 import { env } from './config/env.js';
 import { connectDatabase } from './config/database.js';
 import { logger } from './utils/logger.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { codingEngine } from './services/codingEngine.js';
+
+const execAsync = promisify(exec);
 
 // Routes
 import authRoutes from './routes/auth.js';
@@ -116,6 +120,26 @@ app.get('/api/health', (_req, res) => {
 });
 
 // ============================================
+// DB readiness guard - returns clear error if DB not ready
+// ============================================
+app.use('/api', (req, res, next) => {
+  if (req.path === '/health') return next();
+  if (!dbReady) {
+    res.status(503).json({
+      success: false,
+      error: {
+        code: 'DB_NOT_READY',
+        message: dbError
+          ? `Database error: ${dbError}`
+          : 'Server is starting up, please try again in a few seconds',
+      },
+    });
+    return;
+  }
+  next();
+});
+
+// ============================================
 // API Routes
 // ============================================
 app.use('/api/auth', authRoutes);
@@ -165,17 +189,39 @@ process.on('SIGINT', () => {
 });
 
 /**
- * Initialize database connection in the background.
+ * Initialize database in the background:
+ * 1. Push schema (creates/updates tables) - async, non-blocking
+ * 2. Connect Prisma client
+ * 3. Start coding engine
  * NEVER blocks the event loop. NEVER kills the process on failure.
  */
 async function initDatabase(): Promise<void> {
   try {
+    // Step 1: Push schema to create/update tables
+    logger.info('Pushing database schema...');
+    try {
+      const { stdout, stderr } = await execAsync(
+        'npx prisma db push --skip-generate --accept-data-loss',
+        { timeout: 30000 },
+      );
+      if (stdout) logger.info(`Schema push output: ${stdout.trim()}`);
+      if (stderr) logger.warn(`Schema push stderr: ${stderr.trim()}`);
+      logger.info('Database schema pushed successfully');
+    } catch (pushErr) {
+      const msg = pushErr instanceof Error ? pushErr.message : String(pushErr);
+      logger.warn(`Schema push warning (tables may already exist): ${msg}`);
+      // Don't throw - tables might already exist from a previous deployment
+    }
+
+    // Step 2: Connect Prisma client
     await connectDatabase();
     dbReady = true;
+
+    // Step 3: Start coding engine
     codingEngine.start();
     logger.info(`
 ╔══════════════════════════════════════════════════╗
-║          ⚡ CODEX FORGE v1.0.0 ⚡               ║
+║          CODEX FORGE v1.0.0                      ║
 ║     AI-Powered Coding Automation - READY         ║
 ║  Port:    ${String(env.PORT).padEnd(38)}║
 ║  Env:     ${env.NODE_ENV.padEnd(38)}║
@@ -184,7 +230,7 @@ async function initDatabase(): Promise<void> {
     `);
   } catch (err) {
     dbError = err instanceof Error ? err.message : String(err);
-    logger.error('Database connection failed. Server is running but API routes requiring DB will fail:', err);
+    logger.error('Database init failed. Server running but DB-dependent routes will fail:', err);
     // DO NOT process.exit() - keep serving healthcheck and static files
   }
 }

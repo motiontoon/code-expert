@@ -30,5 +30,5 @@ RUN mkdir -p /app/data /app/logs && chown -R forge:forge /app
 USER forge
 EXPOSE 3000
 
-# db push in background (max 15s), server starts immediately
-CMD ["sh", "-c", "{ timeout 15 npx prisma db push --skip-generate --accept-data-loss 2>&1 || true; } & exec node dist/server/index.js"]
+# Server handles schema push internally (async, non-blocking)
+CMD ["node", "dist/server/index.js"]

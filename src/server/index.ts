@@ -13,7 +13,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 
 import { env } from './config/env.js';
-import { connectDatabase } from './config/database.js';
+import { connectDatabase, getDatabaseUrl } from './config/database.js';
 import { logger } from './utils/logger.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { codingEngine } from './services/codingEngine.js';
@@ -198,11 +198,16 @@ process.on('SIGINT', () => {
 async function initDatabase(): Promise<void> {
   try {
     // Step 1: Push schema to create/update tables
+    // Pass the corrected DATABASE_URL (with sslmode/timeout) to prisma CLI
+    const correctedUrl = getDatabaseUrl();
     logger.info('Pushing database schema...');
     try {
       const { stdout, stderr } = await execAsync(
         'npx prisma db push --skip-generate --accept-data-loss',
-        { timeout: 30000 },
+        {
+          timeout: 30000,
+          env: { ...process.env, DATABASE_URL: correctedUrl },
+        },
       );
       if (stdout) logger.info(`Schema push output: ${stdout.trim()}`);
       if (stderr) logger.warn(`Schema push stderr: ${stderr.trim()}`);

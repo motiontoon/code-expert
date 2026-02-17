@@ -7,7 +7,7 @@ import { logger } from '../utils/logger.js';
  * - Railway proxy / external: no sslmode (Prisma uses SSL by default)
  * - If connection fails, adds connect_timeout for faster retries
  */
-function getDatabaseUrl(): string {
+export function getDatabaseUrl(): string {
   const url = process.env.DATABASE_URL || '';
   if (!url) {
     logger.warn('DATABASE_URL is not set!');
